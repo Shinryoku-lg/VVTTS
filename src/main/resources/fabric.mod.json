@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "voicevoxchat",
+	"version": "${version}",
+	"name": "VVTTS - VOICEVOX Chat TTS",
+	"description": "Reads player chat, using VOICEVOX.",
+	"license": "CC0-1.0",
+	"environment": "client",
+	"icon": "assets/voicevoxchat/icon.png",
+	"contact": {
+		"homepage": "https://modrinth.com/mod/vvtts"
+	},
+	"entrypoints": {
+		"client": [
+			"jp.voicevoxchat.client.VoicevoxChatClient"
+		],
+		"modmenu": [
+			"jp.voicevoxchat.client.VoicevoxModMenu"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"update_checker": true
+		}
+	}
+}

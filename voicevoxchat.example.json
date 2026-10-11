@@ -1,0 +1,14 @@
+{
+  "engineExecutable": "C:/tools/voicevox_engine/run.exe",
+  "engineUrl": "http://127.0.0.1:50021",
+  "nemoEngineExecutable": "C:/tools/voicevox_nemo_engine/run.exe",
+  "nemoEngineUrl": "http://127.0.0.1:50121",
+  "enabled": true,
+  "defaultSpeakerId": 3,
+  "randomDefaultSpeaker": false,
+  "chatNotifications": true,
+  "playerSpeakers": {
+    "Alice": 3,
+    "Bob": 10007
+  }
+}

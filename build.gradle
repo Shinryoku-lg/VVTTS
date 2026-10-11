@@ -1,0 +1,100 @@
+// MODの依存関係、Javaのコンパイル、テスト、配布JARとソースJARの生成を設定します。
+plugins {
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+// 依存ライブラリとMod Menuを取得するリポジトリを登録します。
+repositories {
+	mavenCentral()
+	maven {
+		url = 'https://maven.terraformersmc.com/releases/'
+		content { includeGroup 'com.terraformersmc' }
+	}
+}
+
+// 共通処理とMinecraftクライアント専用処理を分け、同じMODとしてビルドします。
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"voicevoxchat" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+// 実行・コンパイル・テストに必要な依存関係を宣言します。
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	// Intermediaryだけを使用し、開発時もclass_*・method_*・field_*の名前で参照します。
+	mappings loom.layered {}
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	// Mod Menu導入時に設定画面の連携処理が呼ばれます。コンパイル時だけ参照します。
+	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+	testImplementation platform('org.junit:junit-bom:5.12.2')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// JUnitで自動テストを実行します。
+test {
+	useJUnitPlatform()
+}
+
+// UTF-8でリソースを処理し、fabric.mod.jsonにMODバージョンを埋め込みます。
+processResources {
+	filteringCharset = 'UTF-8'
+	def version = project.version
+	inputs.property "version", version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+// Java 21向けにUTF-8のソースコードをコンパイルします。
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+	it.options.encoding = 'UTF-8'
+}
+
+// Javaの互換バージョンを設定し、説明コメントを含むソースJARも生成します。
+java {
+	// LoomがソースJARの変換と生成をbuildタスクに組み込みます。
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+// MOD本体のライセンス文書をプロジェクト名付きでJARに同梱します。
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("LICENSE") {
+		rename { "${it}_$projectName"}
+	}
+}
+
+// Maven形式で公開するときの成果物を登録します。
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+
+	// 公開設定の説明: https://docs.gradle.org/current/userguide/publishing_maven.html
+	repositories {
+		// 公開先が必要な場合に追加します。冒頭の依存関係取得先とは用途が異なります。
+	}
+}

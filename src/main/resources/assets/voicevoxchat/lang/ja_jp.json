@@ -1,0 +1,7 @@
+{
+  "key.voicevoxchat.stop": "再生を中止・キューを空にする",
+  "key.category.voicevoxchat.controls": "VVTTS - VOICEVOX Chat TTS",
+  "modmenu.nameTranslation.voicevoxchat": "VVTTS - VOICEVOX Chat TTS",
+  "modmenu.summaryTranslation.voicevoxchat": "VOICEVOXでチャットを読み上げます",
+  "modmenu.descriptionTranslation.voicevoxchat": "チャットをVOICEVOXで読み上げます。この画面の設定ボタンから、話者IDの割り当て・話者名の一覧・Engineの起動停止等を利用できます。音量はMinecraftのサウンド設定の「音声読み上げ／声」で調整できます。Engineのパスや接続先はconfig/voicevoxchat.jsonを編集し、設定画面の「config再読込」で反映してください。"
+}

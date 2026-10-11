@@ -1,0 +1,7 @@
+{
+  "key.voicevoxchat.stop": "Stop playback and clear queue",
+  "key.category.voicevoxchat.controls": "VVTTS - VOICEVOX Chat TTS",
+  "modmenu.nameTranslation.voicevoxchat": "VVTTS - VOICEVOX Chat TTS",
+  "modmenu.summaryTranslation.voicevoxchat": "VOICEVOX reads chat messages aloud",
+  "modmenu.descriptionTranslation.voicevoxchat": "VOICEVOX reads the chat aloud. From the settings button on this screen, you can assign speaker IDs, view a list of speaker names, and start or stop the engine. You can adjust the volume in Minecraft’s sound settings under “Narrator/Voice” To change the engine path or connection destination, edit the `config/voicevoxchat.json` file and click “Reload Config” on the settings screen to apply the changes."
+}

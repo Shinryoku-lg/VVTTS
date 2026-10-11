@@ -1,0 +1,14 @@
+// ビルド用プラグインの取得先と、成果物名に使用するプロジェクト名を定義します。
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+// 内部MOD IDに合わせた名前を使います。
+rootProject.name = 'voicevoxchat'
