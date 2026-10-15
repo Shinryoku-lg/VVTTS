@@ -1,6 +1,6 @@
 // MODの依存関係、Javaのコンパイル、テスト、配布JARとソースJARの生成を設定します。
 plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
 	id 'maven-publish'
 }
 
@@ -31,13 +31,11 @@ loom {
 // 実行・コンパイル・テストに必要な依存関係を宣言します。
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	// Intermediaryだけを使用し、開発時もclass_*・method_*・field_*の名前で参照します。
-	mappings loom.layered {}
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	// Mod Menu導入時に設定画面の連携処理が呼ばれます。コンパイル時だけ参照します。
-	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 
 	testImplementation platform('org.junit:junit-bom:5.12.2')
 	testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -60,9 +58,9 @@ processResources {
 	}
 }
 
-// Java 21向けにUTF-8のソースコードをコンパイルします。
+// Java 25向けにUTF-8のソースコードをコンパイルします。
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = 25
 	it.options.encoding = 'UTF-8'
 }
 
@@ -71,8 +69,8 @@ java {
 	// LoomがソースJARの変換と生成をbuildタスクに組み込みます。
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 // MOD本体のライセンス文書をプロジェクト名付きでJARに同梱します。

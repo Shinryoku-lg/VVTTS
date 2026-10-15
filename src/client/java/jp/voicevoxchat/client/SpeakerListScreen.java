@@ -4,10 +4,9 @@
 package jp.voicevoxchat.client;
 
 import jp.voicevoxchat.speech.SpeakerCatalog;
-import net.minecraft.class_332;
-import net.minecraft.class_4185;
-import net.minecraft.class_437;
-
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -22,9 +21,9 @@ final class SpeakerListScreen extends BaseScreen {
     private SpeakerCatalog.Snapshot snapshot;
     private List<SpeakerCatalog.Voice> matches = List.of();
     private CompletableFuture<SpeakerCatalog.Snapshot> pending;
-    private class_4185 refreshButton;
-    private class_4185 previousButton;
-    private class_4185 nextButton;
+    private Button refreshButton;
+    private Button previousButton;
+    private Button nextButton;
     private String query = "";
     private String refreshError = "";
     private boolean requested;
@@ -33,32 +32,32 @@ final class SpeakerListScreen extends BaseScreen {
     private int pages = 1;
 
     /** 戻り先と画面タイトルを設定し、共有カタログにある現在の一覧を取得する。 */
-    SpeakerListScreen(VoicevoxChatClient mod, class_437 parent) {
+    SpeakerListScreen(VoicevoxChatClient mod, Screen parent) {
         super(mod, parent, "話者ID・名前の一覧");
         snapshot = mod.catalog().snapshot();
     }
 
     /** 検索欄とページ操作を配置し、初回表示時には話者一覧の再取得を開始する。 */
     @Override
-    protected void method_25426() {
+    protected void init() {
         layout();
-        rows = Math.max(1, (field_22790 - 166) / ROW_HEIGHT);
+        rows = Math.max(1, (height - 166) / ROW_HEIGHT);
         var search = input("ID・名前・Engineで検索", left, 43, contentWidth - 70, 128, query);
-        search.method_1863(value -> {
+        search.setResponder(value -> {
             query = value;
             page = 0;
             filterVoices();
         });
         refreshButton = button("再取得", left + contentWidth - 64, 43, 64, this::refresh);
-        previousButton = button("前へ", left, field_22790 - 52, 60, () -> {
+        previousButton = button("前へ", left, height - 52, 60, () -> {
             page--;
             updateButtons();
         });
-        nextButton = button("次へ", left + contentWidth - 60, field_22790 - 52, 60, () -> {
+        nextButton = button("次へ", left + contentWidth - 60, height - 52, 60, () -> {
             page++;
             updateButtons();
         });
-        button("戻る", left, field_22790 - 26, contentWidth, this::method_25419);
+        button("戻る", left, height - 26, contentWidth, this::onClose);
         filterVoices();
         if (!requested) refresh();
     }
@@ -95,14 +94,14 @@ final class SpeakerListScreen extends BaseScreen {
     /** 一覧の取得状況と現在ページに合わせ、再取得・前へ・次へボタンを有効化する。 */
     private void updateButtons() {
         if (refreshButton == null) return;
-        refreshButton.field_22763 = pending == null;
-        previousButton.field_22763 = page > 0;
-        nextButton.field_22763 = page + 1 < pages;
+        refreshButton.active = pending == null;
+        previousButton.active = page > 0;
+        nextButton.active = page + 1 < pages;
     }
 
     /** 完了した一覧取得や共有カタログの更新を取り込み、検索結果を再計算する。 */
     @Override
-    public void method_25393() {
+    public void tick() {
         if (pending != null && pending.isDone()) {
             try {
                 snapshot = pending.join();
@@ -121,8 +120,8 @@ final class SpeakerListScreen extends BaseScreen {
 
     /** 現在ページの話者情報、件数、取得状況、エラー詳細とページ番号を描画する。 */
     @Override
-    public void method_25394(class_332 graphics, int mouseX, int mouseY, float delta) {
-        super.method_25394(graphics, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
         line(graphics, "検索（ID・名前・Engine）", 31, 0xFFFFFFFF);
         line(graphics, "話者ID・Engine / 話者名（スタイル）", 70, 0xFFBBBBBB);
         for (int row = 0; row < rows && page * rows + row < matches.size(); row++) {
@@ -144,12 +143,12 @@ final class SpeakerListScreen extends BaseScreen {
         boolean hasError = !refreshError.isBlank() || !snapshot.errors().isEmpty();
         String status = pending != null ? count + " / 更新中…"
                 : hasError ? count + " / 接続できないEngineがあります" : count;
-        line(graphics, status, field_22790 - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
+        line(graphics, status, height - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
         String detail = !refreshError.isBlank() ? refreshError
                 : !snapshot.errors().isEmpty() ? String.join(" / ", snapshot.errors())
                 : "名前は接続先Engineの情報を表示しています。";
-        line(graphics, detail, field_22790 - 66, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
-        graphics.method_25300(field_22793, (page + 1) + " / " + pages,
-                field_22789 / 2, field_22790 - 46, 0xFFFFFFFF);
+        line(graphics, detail, height - 66, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
+        graphics.centeredText(font, (page + 1) + " / " + pages,
+                width / 2, height - 46, 0xFFFFFFFF);
     }
 }

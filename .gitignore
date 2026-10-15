@@ -2,6 +2,7 @@
 
 .gradle/
 build/
+build-26.3.log
 out/
 classes/
 

@@ -6,16 +6,15 @@ package jp.voicevoxchat.client;
 import jp.voicevoxchat.speech.PcmAudio;
 import jp.voicevoxchat.speech.SpeechService;
 import net.fabricmc.fabric.api.client.sound.v1.FabricSoundInstance;
-import net.minecraft.class_1102;
-import net.minecraft.class_1113;
-import net.minecraft.class_1140;
-import net.minecraft.class_1144;
-import net.minecraft.class_2960;
-import net.minecraft.class_310;
-import net.minecraft.class_3419;
-import net.minecraft.class_4234;
-import net.minecraft.class_4237;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.AbstractSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.client.sounds.AudioStream;
+import net.minecraft.client.sounds.SoundBufferLibrary;
+import net.minecraft.client.sounds.SoundEngine;
+import net.minecraft.client.sounds.SoundManager;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundSource;
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -39,7 +38,7 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
         if (cancelled.getAsBoolean()) return;
         PlaybackJob job = new PlaybackJob(audio, cancelled);
         if (!current.compareAndSet(null, job)) throw new IllegalStateException("Speech playback is already active");
-        class_310 client = class_310.method_1551();
+        Minecraft client = Minecraft.getInstance();
         try {
             client.execute(() -> start(client, job));
             while (!job.cancelled && !cancelled.getAsBoolean()) {
@@ -68,18 +67,18 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
         PlaybackJob job = current.get();
         if (job != null) {
             job.cancelled = true;
-            class_310.method_1551().execute(() -> finish(job, null));
+            Minecraft.getInstance().execute(() -> finish(job, null));
         }
     }
 
     /** クライアントの各更新で再生終了・取り消し・時間超過を確認し、該当する再生を終了する。 */
-    public void tick(class_310 client) {
+    public void tick(Minecraft client) {
         PlaybackJob job = current.get();
         if (job == null || !job.started || job.finished.isDone()) return;
         try {
-            if (job.cancelled || job.cancellation.getAsBoolean() || !job.manager.method_4877(job.sound)) {
+            if (job.cancelled || job.cancellation.getAsBoolean() || !job.manager.isActive(job.sound)) {
                 finish(job, null);
-            } else if (!client.method_1493() && --job.ticksRemaining <= 0) {
+            } else if (!client.isPaused() && --job.ticksRemaining <= 0) {
                 finish(job, new IOException("Minecraftの音声再生が時間内に完了しませんでした。"));
             }
         } catch (RuntimeException exception) {
@@ -88,18 +87,18 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
     }
 
     /** 有効な再生要求をMinecraftの音声管理へ渡し、開始できなければ待機中の処理を終了する。 */
-    private void start(class_310 client, PlaybackJob job) {
+    private void start(Minecraft client, PlaybackJob job) {
         if (job.cancelled || job.cancellation.getAsBoolean() || current.get() != job) {
             finish(job, null);
             return;
         }
         try {
-            job.manager = client.method_1483();
+            job.manager = client.getSoundManager();
             job.sound = new SpeechSound(job.audio);
-            var result = job.manager.method_4873(job.sound);
+            var result = job.manager.play(job.sound);
             job.started = true;
             // Muted categories, unavailable devices and missing resources must not stall the queue.
-            if (result != class_1140.class_11518.field_60954) finish(job, null);
+            if (result != SoundEngine.PlayResult.STARTED) finish(job, null);
         } catch (RuntimeException exception) {
             finish(job, exception);
         }
@@ -111,7 +110,7 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
         if (!job.stopped && job.sound != null && job.manager != null) {
             job.stopped = true;
             try {
-                job.manager.method_4870(job.sound);
+                job.manager.stop(job.sound);
             } catch (RuntimeException exception) {
                 if (failure == null) failure = exception;
             }
@@ -128,7 +127,7 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
         volatile boolean cancelled;
         volatile boolean started;
         // The fields below belong exclusively to Minecraft's client thread.
-        class_1144 manager;
+        SoundManager manager;
         SpeechSound sound;
         boolean stopped;
         long ticksRemaining;
@@ -143,29 +142,29 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
         }
     }
 
-    private static final class SpeechSound extends class_1102 implements FabricSoundInstance {
+    private static final class SpeechSound extends AbstractSoundInstance implements FabricSoundInstance {
         private final PcmAudio audio;
 
         /** 音声カテゴリで、距離減衰や繰り返しのない読み上げ用サウンドを作成する。 */
         SpeechSound(PcmAudio audio) {
-            super(class_2960.method_60655("voicevoxchat", "speech"), class_3419.field_15246,
-                    class_1113.method_43221());
+            super(Identifier.fromNamespaceAndPath("voicevoxchat", "speech"), SoundSource.VOICE,
+                    SoundInstance.createUnseededRandom());
             this.audio = audio;
-            field_5442 = 1.0F;
-            field_5441 = 1.0F;
-            field_5446 = false;
-            field_18936 = true;
-            field_5440 = class_1113.class_1114.field_5478;
+            volume = 1.0F;
+            pitch = 1.0F;
+            looping = false;
+            relative = true;
+            attenuation = SoundInstance.Attenuation.NONE;
         }
 
         /** リソースファイルの代わりに、合成済みPCMを供給する音声ストリームを返す。 */
         @Override
-        public CompletableFuture<class_4234> getAudioStream(class_4237 loader, class_2960 id, boolean looping) {
+        public CompletableFuture<AudioStream> getAudioStream(SoundBufferLibrary loader, Identifier id, boolean looping) {
             return CompletableFuture.completedFuture(new PcmStream(audio));
         }
     }
 
-    private static final class PcmStream implements class_4234 {
+    private static final class PcmStream implements AudioStream {
         private final AudioFormat format;
         private byte[] samples;
         private int position;
@@ -179,11 +178,11 @@ public final class MinecraftSoundPlayback implements SpeechService.AudioPlayback
 
         /** サンプルレートやチャンネル数など、供給するPCM音声の形式を返す。 */
         @Override
-        public AudioFormat method_19719() { return format; }
+        public AudioFormat getFormat() { return format; }
 
         /** 要求量をフレーム境界に合わせてPCMを読み出し、末尾に達していればnullを返す。 */
         @Override
-        public ByteBuffer method_19720(int requestedBytes) {
+        public ByteBuffer read(int requestedBytes) {
             if (position >= samples.length) return null;
             int frameSize = format.getFrameSize();
             int length = Math.min(samples.length - position, Math.max(frameSize, requestedBytes));
