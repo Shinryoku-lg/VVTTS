@@ -56,7 +56,17 @@ abstract class BaseScreen extends Screen {
     /** 文字列を翻訳キーとして扱わず、表示用のリテラルテキストへ変換する。 */
     protected static Component text(String value) { return Component.literal(value); }
 
-    /** 登録済み部品を描画した後、画面上部にタイトルを中央表示する。背景はScreen側の処理に任せる。 */
+    /** ゲーム中はアクセシビリティ設定の強さで背景をぼかし、メニュー中は標準背景を表示する。 */
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (minecraft.level != null && !isInGameUi()) {
+            extractBlurredBackground(graphics);
+        } else {
+            super.extractBackground(graphics, mouseX, mouseY, delta);
+        }
+    }
+
+    /** 登録済み部品を描画した後、画面上部にタイトルを中央表示する。 */
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);

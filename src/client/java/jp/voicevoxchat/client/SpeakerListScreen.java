@@ -16,7 +16,10 @@ import java.util.concurrent.CompletionException;
 /** 通信を話者カタログに任せ、クライアントの更新時に取得済みの結果だけを画面へ反映する。 */
 final class SpeakerListScreen extends BaseScreen {
     private static final int LIST_TOP = 84;
-    private static final int ROW_HEIGHT = 24;
+    private static final int ROW_HEIGHT = 22;
+    private static final int COLUMN_COUNT = 2;
+    private static final int ROWS_PER_COLUMN = 4;
+    private static final int PAGE_SIZE = COLUMN_COUNT * ROWS_PER_COLUMN;
 
     private SpeakerCatalog.Snapshot snapshot;
     private List<SpeakerCatalog.Voice> matches = List.of();
@@ -27,7 +30,6 @@ final class SpeakerListScreen extends BaseScreen {
     private String query = "";
     private String refreshError = "";
     private boolean requested;
-    private int rows = 1;
     private int page;
     private int pages = 1;
 
@@ -41,7 +43,6 @@ final class SpeakerListScreen extends BaseScreen {
     @Override
     protected void init() {
         layout();
-        rows = Math.max(1, (height - 166) / ROW_HEIGHT);
         var search = input("ID・名前・Engineで検索", left, 43, contentWidth - 70, 128, query);
         search.setResponder(value -> {
             query = value;
@@ -86,7 +87,7 @@ final class SpeakerListScreen extends BaseScreen {
                 .sorted(Comparator.comparing(SpeakerCatalog.Voice::engineName)
                         .thenComparingInt(SpeakerCatalog.Voice::id))
                 .toList();
-        pages = Math.max(1, (matches.size() + rows - 1) / rows);
+        pages = Math.max(1, (matches.size() + PAGE_SIZE - 1) / PAGE_SIZE);
         page = Math.min(page, pages - 1);
         updateButtons();
     }
@@ -124,13 +125,18 @@ final class SpeakerListScreen extends BaseScreen {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         line(graphics, "検索（ID・名前・Engine）", 31, 0xFFFFFFFF);
         line(graphics, "話者ID・Engine / 話者名（スタイル）", 70, 0xFFBBBBBB);
-        for (int row = 0; row < rows && page * rows + row < matches.size(); row++) {
-            var voice = matches.get(page * rows + row);
+        int columnWidth = (contentWidth - 8) / COLUMN_COUNT;
+        int pageStart = page * PAGE_SIZE;
+        for (int offset = 0; offset < PAGE_SIZE && pageStart + offset < matches.size(); offset++) {
+            var voice = matches.get(pageStart + offset);
+            int column = offset % COLUMN_COUNT;
+            int row = offset / COLUMN_COUNT;
+            int x = left + column * (columnWidth + 8);
             int y = LIST_TOP + row * ROW_HEIGHT;
-            line(graphics, "ID: " + voice.id() + "  " + voice.engineName(), y, 0xFFBBBBBB);
+            columnLine(graphics, "ID: " + voice.id() + "  " + voice.engineName(), x, columnWidth, y, 0xFFBBBBBB);
             String name = voice.speakerName();
             if (!voice.styleName().isBlank()) name += "（" + voice.styleName() + "）";
-            line(graphics, name, y + 11, 0xFFFFFFFF);
+            columnLine(graphics, name, x, columnWidth, y + 11, 0xFFFFFFFF);
         }
         if (matches.isEmpty()) {
             String empty = pending != null ? "話者一覧を取得中…"
@@ -139,16 +145,19 @@ final class SpeakerListScreen extends BaseScreen {
             line(graphics, empty, LIST_TOP + 11, 0xFFBBBBBB);
         }
 
-        String count = matches.size() + "件 / 取得済み " + snapshot.voices().size() + "件";
         boolean hasError = !refreshError.isBlank() || !snapshot.errors().isEmpty();
-        String status = pending != null ? count + " / 更新中…"
-                : hasError ? count + " / 接続できないEngineがあります" : count;
-        line(graphics, status, height - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
-        String detail = !refreshError.isBlank() ? refreshError
-                : !snapshot.errors().isEmpty() ? String.join(" / ", snapshot.errors())
-                : "名前は接続先Engineの情報を表示しています。";
-        line(graphics, detail, height - 66, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
+        String status = pending != null ? "話者一覧を更新中…"
+                : !refreshError.isBlank() ? refreshError
+                : !snapshot.errors().isEmpty() ? String.join(" / ", snapshot.errors()) : "";
+        if (!status.isBlank()) line(graphics, status, height - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
+        String count = matches.size() + "件 / 取得済み " + snapshot.voices().size() + "件";
+        line(graphics, count, height - 66, 0xFFAAAAAA);
         graphics.centeredText(font, (page + 1) + " / " + pages,
                 width / 2, height - 46, 0xFFFFFFFF);
+    }
+
+    /** 1列の幅で文字列を切り詰め、指定した列と行に描画する。 */
+    private void columnLine(GuiGraphicsExtractor graphics, String value, int x, int columnWidth, int y, int color) {
+        graphics.text(font, font.plainSubstrByWidth(value, columnWidth), x, y, color);
     }
 }
