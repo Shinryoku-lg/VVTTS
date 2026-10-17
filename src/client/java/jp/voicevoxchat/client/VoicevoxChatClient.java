@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -86,17 +87,9 @@ public final class VoicevoxChatClient implements ClientModInitializer {
             LOGGER.error("Could not initialize VOICEVOX Chat", exception);
         }
 
-        var category = KeyMapping.Category.MISC;
-        var stopSpeech = new KeyMapping("key.voicevoxchat.stop", InputConstants.KEY_O, category);
-        try {
-            var keyBindings = KeyMapping.class.getDeclaredField("ALL");
-            keyBindings.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            var allBindings = (java.util.Map<String, KeyMapping>) keyBindings.get(null);
-            allBindings.put(stopSpeech.getName(), stopSpeech);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("Could not register VOICEVOX Chat key mapping", exception);
-        }
+        var category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("voicevoxchat", "controls"));
+        var stopSpeech = KeyMappingHelper.registerKeyMapping(
+                new KeyMapping("key.voicevoxchat.stop", InputConstants.KEY_O, category));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (playback != null) playback.tick(client);
             displayEngineNotices(client);
@@ -168,6 +161,14 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     public EngineController nemoEngine() { return nemoEngine; }
     /** 両Engineで利用できる話者を管理する共有カタログを返す。 */
     public SpeakerCatalog catalog() { return catalog; }
+    /** 選択された話者の表示名を含むサンプル文を、通常の読み上げキューへ追加する。 */
+    public boolean enqueueSpeakerPreview(SpeakerCatalog.Voice voice) {
+        if (speech == null || reloading || closing || voice == null) return false;
+        String name = voice.styleName().isBlank() ? voice.speakerName()
+                : Component.translatable("screen.voicevoxchat.speaker_entry_name_style",
+                        voice.speakerName(), voice.styleName()).getString();
+        return speech.enqueue(voice.id() + " " + name + " です", voice.id());
+    }
     /** 指定Engineで起動後の話者準備処理が続いているかを返す。 */
     public boolean preparingEngine(EngineController controller) { return preparingEngines.contains(controller); }
     /** 処理中の音声を含む読み上げ待ち件数を返し、未初期化なら0を返す。 */
@@ -264,6 +265,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
                 return;
             }
             var state = controller.state();
+            boolean playerWasAvailable = Minecraft.getInstance().player != null;
             LOGGER.info("{} engine: {}", name, state);
             if (starting && (state == EngineController.State.OWNED_RUNNING
                     || state == EngineController.State.EXTERNAL_RUNNING)) {
@@ -283,7 +285,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
                         case EXTERNAL_RUNNING -> Component.translatable("chat.voicevoxchat.engine_connected", name);
                         default -> null;
                     };
-                    if (notice != null && chatNotificationsEnabled()) engineNotices.put(controller,
+                    if (notice != null && playerWasAvailable && chatNotificationsEnabled()) engineNotices.put(controller,
                             new EngineNotice(observedCatalog, notice));
                 }));
             } else {

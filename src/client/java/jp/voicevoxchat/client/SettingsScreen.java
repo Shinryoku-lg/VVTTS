@@ -163,7 +163,7 @@ final class SettingsScreen extends BaseScreen {
         if (mod.preparingEngine(selectedEngine())) state = tr("engine.voicevoxchat.state.preparing_speakers");
         line(graphics, tr("screen.voicevoxchat.engine_status", engineName(), state), 108, 0xFFDDDDDD);
         Component notice = mod.hasError() ? mod.error() : !mod.reloadStatus().getString().isBlank()
-                ? mod.reloadStatus() : tr("screen.voicevoxchat.queue_volume", mod.pendingCount());
+                ? mod.reloadStatus() : tr("screen.voicevoxchat.volume");
         line(graphics, notice, 198, mod.hasError() ? 0xFFFF8888 : 0xFFAAAAAA);
     }
 }
