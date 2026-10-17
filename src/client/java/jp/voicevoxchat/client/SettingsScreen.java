@@ -10,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 final class SettingsScreen extends BaseScreen {
     private EditBox defaultSpeaker;
@@ -27,7 +28,7 @@ final class SettingsScreen extends BaseScreen {
 
     /** MODの表示名をタイトルに設定し、戻り先の画面を保持する。 */
     SettingsScreen(VoicevoxChatClient mod, Screen parent) {
-        super(mod, parent, "VVTTS - VOICEVOX Chat TTS");
+        super(mod, parent, "screen.voicevoxchat.title");
     }
 
     /** 現在の設定と再読込状態に合わせて、設定項目と各操作ボタンを配置する。 */
@@ -36,9 +37,9 @@ final class SettingsScreen extends BaseScreen {
         layout();
         displayedReloading = mod.reloading();
         displayedConfig = mod.config();
-        button("完了", left, height - 26, contentWidth, this::onClose);
+        button("screen.voicevoxchat.done", left, height - 26, contentWidth, this::onClose);
         int half = (contentWidth - 4) / 2;
-        reloadButton = button("config再読込", left + half + 4, 32, contentWidth - half - 4, () -> {
+        reloadButton = button("screen.voicevoxchat.config_reload", left + half + 4, 32, contentWidth - half - 4, () -> {
             mod.reloadConfig(() -> {
                 defaultSpeaker = null;
                 if (ActiveScreenTracker.currentScreen() == this) rebuildWidgets();
@@ -55,16 +56,16 @@ final class SettingsScreen extends BaseScreen {
                     current.randomDefaultSpeaker(), current.chatNotifications()));
             updateButtons();
         });
-        defaultSpeaker = input("初期話者ID", left + 46, 58, 52, 10,
+        defaultSpeaker = input("screen.voicevoxchat.default_speaker", left + 46, 58, 52, 10,
                 defaultSpeaker == null ? Integer.toString(preferences.defaultSpeakerId()) : defaultSpeaker.getValue());
-        applySpeakerButton = button("適用", left + 102, 58, 44, () -> {
+        applySpeakerButton = button("screen.voicevoxchat.apply", left + 102, 58, 44, () -> {
             try {
                 int id = Integer.parseInt(defaultSpeaker.getValue());
                 var current = mod.config().preferences();
                 mod.save(new Preferences(current.enabled(), id, current.playerSpeakers(),
                         current.randomDefaultSpeaker(), current.chatNotifications()));
             } catch (IllegalArgumentException exception) {
-                mod.reportError("話者IDは0以上の整数にしてください。");
+                mod.reportError(tr("message.voicevoxchat.invalid_speaker_id"));
             }
         });
         randomButton = button("", left + 150, 58, contentWidth - 150, () -> {
@@ -78,10 +79,12 @@ final class SettingsScreen extends BaseScreen {
             updateButtons();
         });
         int quarter = (contentWidth - half - 8) / 2;
-        startButton = button("起動", left + half + 4, 84, quarter, () -> mod.startEngine(selectedNemo));
-        stopButton = button("停止", left + half + quarter + 8, 84, contentWidth - half - quarter - 8,
+        startButton = button("screen.voicevoxchat.engine_start", left + half + 4, 84, quarter,
+                () -> mod.startEngine(selectedNemo));
+        stopButton = button("screen.voicevoxchat.engine_stop", left + half + quarter + 8, 84,
+                contentWidth - half - quarter - 8,
                 () -> mod.stopEngine(selectedNemo));
-        button("プレイヤー別の話者ID", left, 122, half,
+        button("screen.voicevoxchat.players", left, 122, half,
                 () -> minecraft.setScreenAndShow(new PlayersScreen(mod, this)));
         notificationsButton = button("", left + half + 4, 122, contentWidth - half - 4, () -> {
             var current = mod.config().preferences();
@@ -89,9 +92,9 @@ final class SettingsScreen extends BaseScreen {
                     current.randomDefaultSpeaker(), !current.chatNotifications()));
             updateButtons();
         });
-        button("話者ID・名前の一覧", left, 148, contentWidth,
+        button("screen.voicevoxchat.speaker_list", left, 148, contentWidth,
                 () -> minecraft.setScreenAndShow(new SpeakerListScreen(mod, this)));
-        button("再生を中止・キューを空にする", left, 174, contentWidth, mod::cancelSpeech);
+        button("screen.voicevoxchat.cancel_speech", left, 174, contentWidth, mod::cancelSpeech);
         updateButtons();
     }
 
@@ -100,17 +103,25 @@ final class SettingsScreen extends BaseScreen {
         return selectedNemo ? mod.nemoEngine() : mod.engine();
     }
 
+    /** 現在選択中のEngine名を表示用データとして返す。 */
+    private Component engineName() {
+        return Component.literal(selectedNemo ? "Nemo" : "VOICEVOX");
+    }
+
     /** 設定値とEngineの状態を各ボタンの表示名・入力可否・押下可否へ反映する。 */
     private void updateButtons() {
         if (!mod.ready() || mod.reloading()) return;
-        enabledButton.setMessage(text("読み上げ: " + (mod.config().preferences().enabled() ? "ON" : "OFF")));
-        notificationsButton.setMessage(text("チャット通知: "
-                + (mod.config().preferences().chatNotifications() ? "ON" : "OFF")));
+        enabledButton.setMessage(tr("screen.voicevoxchat.enabled",
+                tr(mod.config().preferences().enabled() ? "common.voicevoxchat.on" : "common.voicevoxchat.off")));
+        notificationsButton.setMessage(tr("screen.voicevoxchat.chat_notifications",
+                tr(mod.config().preferences().chatNotifications()
+                        ? "common.voicevoxchat.on" : "common.voicevoxchat.off")));
         boolean random = mod.config().preferences().randomDefaultSpeaker();
-        randomButton.setMessage(text("ランダム: " + (random ? "ON" : "OFF")));
+        randomButton.setMessage(tr("screen.voicevoxchat.random",
+                tr(random ? "common.voicevoxchat.on" : "common.voicevoxchat.off")));
         defaultSpeaker.active = !random;
         applySpeakerButton.active = !random;
-        engineButton.setMessage(text("Engine: " + (selectedNemo ? "Nemo" : "VOICEVOX")));
+        engineButton.setMessage(tr("screen.voicevoxchat.engine_selector", engineName()));
         var state = selectedEngine().state();
         startButton.active = state == EngineController.State.STOPPED || state == EngineController.State.ERROR;
         stopButton.active = selectedEngine().isOwnedRunning() && state != EngineController.State.STOPPING;
@@ -137,22 +148,22 @@ final class SettingsScreen extends BaseScreen {
             return;
         }
         if (!mod.ready()) {
-            graphics.textWithWordWrap(font, text(mod.error()), left, 64, contentWidth, 0xFFFF8888);
+            graphics.textWithWordWrap(font, mod.error(), left, 64, contentWidth, 0xFFFF8888);
             return;
         }
-        label(graphics, "初期ID", left, 64, 0xFFFFFFFF);
-        String state = switch (selectedEngine().state()) {
-            case STOPPED -> "未接続";
-            case STARTING -> "起動中…";
-            case OWNED_RUNNING -> "稼働中";
-            case EXTERNAL_RUNNING -> "接続済み";
-            case STOPPING -> "停止中…";
-            case ERROR -> "エラー: " + selectedEngine().detail();
+        label(graphics, tr("screen.voicevoxchat.default_id"), left, 64, 0xFFFFFFFF);
+        Component state = switch (selectedEngine().state()) {
+            case STOPPED -> tr("engine.voicevoxchat.state.disconnected");
+            case STARTING -> tr("engine.voicevoxchat.state.starting");
+            case OWNED_RUNNING -> tr("engine.voicevoxchat.state.running");
+            case EXTERNAL_RUNNING -> tr("engine.voicevoxchat.state.connected");
+            case STOPPING -> tr("engine.voicevoxchat.state.stopping");
+            case ERROR -> tr("engine.voicevoxchat.state.error", selectedEngine().detail());
         };
-        if (mod.preparingEngine(selectedEngine())) state = "話者を準備中…";
-        line(graphics, (selectedNemo ? "Nemo: " : "VOICEVOX: ") + state, 108, 0xFFDDDDDD);
-        String notice = !mod.error().isBlank() ? mod.error() : !mod.reloadStatus().isBlank()
-                ? mod.reloadStatus() : "キュー: " + mod.pendingCount() + " / 音量: 「音声読み上げ／声」で調整可能";
-        line(graphics, notice, 198, mod.error().isBlank() ? 0xFFAAAAAA : 0xFFFF8888);
+        if (mod.preparingEngine(selectedEngine())) state = tr("engine.voicevoxchat.state.preparing_speakers");
+        line(graphics, tr("screen.voicevoxchat.engine_status", engineName(), state), 108, 0xFFDDDDDD);
+        Component notice = mod.hasError() ? mod.error() : !mod.reloadStatus().getString().isBlank()
+                ? mod.reloadStatus() : tr("screen.voicevoxchat.queue_volume", mod.pendingCount());
+        line(graphics, notice, 198, mod.hasError() ? 0xFFFF8888 : 0xFFAAAAAA);
     }
 }

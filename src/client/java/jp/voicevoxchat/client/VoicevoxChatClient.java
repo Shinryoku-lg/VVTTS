@@ -49,12 +49,12 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     private EngineWarmup warmup;
     private SpeechService speech;
     private MinecraftSoundPlayback playback;
-    private volatile String error = "";
+    private volatile Component error = Component.empty();
     private final ExecutorService configWorker = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().daemon().name("voicevox-config").factory());
     private boolean reloading;
     private boolean closing;
-    private String reloadStatus = "";
+    private Component reloadStatus = Component.empty();
     // Client-thread-only; retain startup notices until a world is available.
     private final Map<EngineController, EngineNotice> engineNotices = new LinkedHashMap<>();
     private final Set<EngineController> preparingEngines = new HashSet<>();
@@ -63,7 +63,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     private long speechGeneration;
 
     /** 通知作成時のカタログと表示文を保持し、設定変更前の古い通知を判別する。 */
-    private record EngineNotice(SpeakerCatalog catalog, String text) {}
+    private record EngineNotice(SpeakerCatalog catalog, Component text) {}
 
     /** 設定と各サービスを作成し、チャット・停止キー・終了処理を登録してEngineの自動起動を始める。 */
     @Override
@@ -82,7 +82,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
             playback = new MinecraftSoundPlayback();
             speech = new SpeechService(catalog::resolve, this::reportError, playback);
         } catch (IOException | RuntimeException exception) {
-            reportError("設定を読み込めません。config/voicevoxchat.json を修正して「config再読込」を押してください。");
+            reportError(Component.translatable("message.voicevoxchat.config_load_failed"));
             LOGGER.error("Could not initialize VOICEVOX Chat", exception);
         }
 
@@ -124,7 +124,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
                             () -> assignRandomSpeaker(receivedConfig, receivedCatalog, sender.name(), receivedGeneration))
                         : speech.enqueue(utterance.text(), utterance.speakerId());
                 if (!accepted) {
-                    reportError("読み上げキューが満杯のため、新しいメッセージをスキップしました。");
+                    reportError(Component.translatable("message.voicevoxchat.queue_full"));
                 }
             });
         });
@@ -173,9 +173,11 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     /** 処理中の音声を含む読み上げ待ち件数を返し、未初期化なら0を返す。 */
     public int pendingCount() { return speech == null ? 0 : speech.pendingCount(); }
     /** 設定画面に表示する最新のエラーメッセージを返す。 */
-    public String error() { return error; }
+    public Component error() { return error; }
+    /** 画面に表示するエラーが現在設定されているかを返す。 */
+    public boolean hasError() { return !error.getString().isBlank(); }
     /** 設定画面に表示するエラーメッセージを消去する。 */
-    public void clearError() { error = ""; }
+    public void clearError() { error = Component.empty(); }
     /** 遅延中の話者割り当てを無効化し、通知を出さずに再生と読み上げキューを取り消す。 */
     public void clearSpeech() {
         // Invalidate pending main-thread assignments before interrupting the speech worker.
@@ -185,7 +187,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     /** ユーザー操作による再生中止とキュー消去を実行し、通知が有効ならチャットに知らせる。 */
     public void cancelSpeech() {
         clearSpeech();
-        displayChatNotice(Minecraft.getInstance(), "[VVVTS] 読み上げキューをクリアしました。");
+        displayChatNotice(Minecraft.getInstance(), Component.translatable("chat.voicevoxchat.queue_cleared"));
     }
 
     /** 設定が読み込まれており、MODのチャット通知が有効になっているかを返す。 */
@@ -194,28 +196,28 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     }
 
     /** 終了状態と通知設定を確認し、ワールド内の自分のクライアントだけに通知を表示する。 */
-    private void displayChatNotice(Minecraft client, String message) {
+    private void displayChatNotice(Minecraft client, Component message) {
         if (!closing && chatNotificationsEnabled() && client.player != null) {
-            client.player.sendSystemMessage(Component.literal(message));
+            client.player.sendSystemMessage(message);
         }
     }
     /** configファイルの再読込処理が進行中かを返す。 */
     public boolean reloading() { return reloading; }
     /** config再読込の進行状況または結果を表す表示文を返す。 */
-    public String reloadStatus() { return reloadStatus; }
+    public Component reloadStatus() { return reloadStatus; }
 
     /** 設定済みの両Engineをバックグラウンドで起動し、接続先が同じ場合は起動処理を順番に行う。 */
     private void startConfiguredEngines() {
         var primary = engine;
         var nemo = nemoEngine;
         var primaryStart = primary.startConfigured();
-        observeEngineOperation(primary, "VOICEVOX", "起動", primaryStart);
+        observeEngineOperation(primary, "VOICEVOX", true, primaryStart);
         // If both entries point at one endpoint, let the first launch finish before probing the second.
         var environment = config.environment();
         var nemoStart = environment.engineUri().resolve("/").equals(environment.nemoEngineUri().resolve("/"))
                 ? primaryStart.handle((ignored, failure) -> null).thenCompose(ignored -> nemo.startConfigured())
                 : nemo.startConfigured();
-        observeEngineOperation(nemo, "VOICEVOX Nemo", "起動", nemoStart);
+        observeEngineOperation(nemo, "VOICEVOX Nemo", true, nemoStart);
     }
 
     /** 選択されたEngineを手動起動し、過去の操作と話者準備の状態を更新する。 */
@@ -225,7 +227,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
         var controller = nemo ? nemoEngine : engine;
         engineOperations.remove(controller);
         warmup.reset(nemo ? config.environment().nemoEngineUri() : config.environment().engineUri());
-        observeEngineOperation(controller, nemo ? "VOICEVOX Nemo" : "VOICEVOX", "起動", controller.start());
+        observeEngineOperation(controller, nemo ? "VOICEVOX Nemo" : "VOICEVOX", true, controller.start());
     }
 
     /** 読み上げを消去し、選択されたEngineのうちMODが所有するプロセスの停止を要求する。 */
@@ -238,11 +240,11 @@ public final class VoicevoxChatClient implements ClientModInitializer {
         preparingEngines.remove(controller);
         engineOperations.remove(controller);
         warmup.reset(nemo ? config.environment().nemoEngineUri() : config.environment().engineUri());
-        observeEngineOperation(controller, nemo ? "VOICEVOX Nemo" : "VOICEVOX", "停止", controller.stop());
+        observeEngineOperation(controller, nemo ? "VOICEVOX Nemo" : "VOICEVOX", false, controller.stop());
     }
 
     /** Engine操作の完了を監視し、有効な結果だけで話者一覧の更新・話者準備・通知を進める。 */
-    private void observeEngineOperation(EngineController controller, String name, String action,
+    private void observeEngineOperation(EngineController controller, String name, boolean starting,
                                         CompletableFuture<Void> operation) {
         SpeakerCatalog observedCatalog = catalog;
         long operationId = ++engineOperationSequence;
@@ -254,13 +256,16 @@ public final class VoicevoxChatClient implements ClientModInitializer {
                 Throwable cause = failure;
                 while (cause instanceof CompletionException && cause.getCause() != null) cause = cause.getCause();
                 if (cause instanceof CancellationException) return;
-                reportError(name + " の" + action + "に失敗しました: " + controller.detail());
-                LOGGER.warn("{} engine {} failed", name, action, cause);
+                Component action = Component.translatable(starting
+                        ? "engine.voicevoxchat.action.start" : "engine.voicevoxchat.action.stop");
+                reportError(Component.translatable("message.voicevoxchat.engine_operation_failed",
+                        name, action, controller.detail()));
+                LOGGER.warn("{} engine {} failed", name, starting ? "start" : "stop", cause);
                 return;
             }
             var state = controller.state();
             LOGGER.info("{} engine: {}", name, state);
-            if (action.equals("起動") && (state == EngineController.State.OWNED_RUNNING
+            if (starting && (state == EngineController.State.OWNED_RUNNING
                     || state == EngineController.State.EXTERNAL_RUNNING)) {
                 preparingEngines.add(controller);
                 URI endpoint = controller == nemoEngine ? config.environment().nemoEngineUri() : config.environment().engineUri();
@@ -273,13 +278,13 @@ public final class VoicevoxChatClient implements ClientModInitializer {
                     preparingEngines.remove(controller);
                     if (controller.state() != EngineController.State.OWNED_RUNNING
                             && controller.state() != EngineController.State.EXTERNAL_RUNNING) return;
-                    String notice = switch (state) {
-                        case OWNED_RUNNING -> name + " Engine の起動が完了しました。";
-                        case EXTERNAL_RUNNING -> name + " Engine に接続しました（起動済み）。";
+                    Component notice = switch (state) {
+                        case OWNED_RUNNING -> Component.translatable("chat.voicevoxchat.engine_started", name);
+                        case EXTERNAL_RUNNING -> Component.translatable("chat.voicevoxchat.engine_connected", name);
                         default -> null;
                     };
                     if (notice != null && chatNotificationsEnabled()) engineNotices.put(controller,
-                            new EngineNotice(observedCatalog, "[VVVTS] " + notice));
+                            new EngineNotice(observedCatalog, notice));
                 }));
             } else {
                 observedCatalog.refreshAfterCurrent();
@@ -364,7 +369,7 @@ public final class VoicevoxChatClient implements ClientModInitializer {
     public void reloadConfig(Runnable finished) {
         if (reloading || closing) return;
         reloading = true;
-        reloadStatus = "configを読み込み中…";
+        reloadStatus = Component.translatable("screen.voicevoxchat.config_loading");
         clearError();
         CompletableFuture.supplyAsync(() -> {
             try {
@@ -429,13 +434,14 @@ public final class VoicevoxChatClient implements ClientModInitializer {
         reloading = false;
         if (failure == null) {
             clearError();
-            reloadStatus = "configを反映しました。設定済みEngineを自動起動します。";
+            reloadStatus = Component.translatable("message.voicevoxchat.config_reloaded");
         } else {
-            reloadStatus = "";
+            reloadStatus = Component.empty();
             LOGGER.warn("Could not reload VOICEVOX Chat config; retaining previous configuration", failure);
             Throwable cause = failure;
             while (cause instanceof CompletionException && cause.getCause() != null) cause = cause.getCause();
-            reportError("configの反映に失敗しました。前の設定を維持します: " + cause.getMessage());
+            reportError(Component.translatable("message.voicevoxchat.config_reload_failed",
+                    cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage()));
         }
         finished.run();
     }
@@ -452,14 +458,19 @@ public final class VoicevoxChatClient implements ClientModInitializer {
             return true;
         } catch (IOException exception) {
             LOGGER.error("Could not save VOICEVOX Chat preferences", exception);
-            reportError("設定を保存できません。ログとconfigファイルを確認してください。");
+            reportError(Component.translatable("message.voicevoxchat.config_save_failed"));
             return false;
         }
     }
 
     /** 最新エラーを画面表示用に保持し、同じ内容を警告ログへ記録する。 */
     public void reportError(String message) {
+        reportError(Component.literal(message));
+    }
+
+    /** 翻訳済みComponentを画面表示用に保持し、解決後の文字列を警告ログへ記録する。 */
+    public void reportError(Component message) {
         error = message;
-        LOGGER.warn("{}", message);
+        LOGGER.warn("{}", message.getString());
     }
 }

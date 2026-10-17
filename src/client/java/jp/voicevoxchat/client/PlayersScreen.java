@@ -4,6 +4,7 @@
 package jp.voicevoxchat.client;
 
 import jp.voicevoxchat.config.ConfigStore.Preferences;
+import jp.voicevoxchat.config.ConfigStore.ValidationException;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -20,18 +21,18 @@ final class PlayersScreen extends BaseScreen {
 
     /** プレイヤー別設定画面のタイトルと戻り先を設定する。 */
     PlayersScreen(VoicevoxChatClient mod, Screen parent) {
-        super(mod, parent, "プレイヤー別の話者ID");
+        super(mod, parent, "screen.voicevoxchat.players");
     }
 
     /** 入力値を維持して編集欄を作り、登録済み話者のページと操作ボタンを配置する。 */
     @Override
     protected void init() {
         layout();
-        playerName = input("プレイヤー名", left, 46, contentWidth - 80, 16,
+        playerName = input("screen.voicevoxchat.player_name", left, 46, contentWidth - 80, 16,
                 playerName == null ? "" : playerName.getValue());
-        speakerId = input("話者ID", left + contentWidth - 74, 46, 74, 10,
+        speakerId = input("screen.voicevoxchat.speaker_id", left + contentWidth - 74, 46, 74, 10,
                 speakerId == null ? "3" : speakerId.getValue());
-        button("追加・更新して保存", left, 72, contentWidth, this::savePlayer);
+        button("screen.voicevoxchat.save_player", left, 72, contentWidth, this::savePlayer);
 
         displayedSpeakers = mod.config().preferences().playerSpeakers();
         var entries = new ArrayList<>(displayedSpeakers.entrySet());
@@ -41,21 +42,24 @@ final class PlayersScreen extends BaseScreen {
         for (int row = 0; row < rows && page * rows + row < entries.size(); row++) {
             var entry = entries.get(page * rows + row);
             int y = 112 + row * 22;
-            button(entry.getKey() + " → " + entry.getValue(), left, y, contentWidth - 54, () -> {
+            button(tr("screen.voicevoxchat.player_entry", entry.getKey(), entry.getValue()),
+                    left, y, contentWidth - 54, () -> {
                 playerName.setValue(entry.getKey());
                 speakerId.setValue(Integer.toString(entry.getValue()));
             });
-            button("削除", left + contentWidth - 50, y, 50, () -> {
+            button("screen.voicevoxchat.delete", left + contentWidth - 50, y, 50, () -> {
                 Map<String, Integer> updated = copySpeakers();
                 updated.remove(entry.getKey());
                 if (saveSpeakers(updated)) rebuildWidgets();
             });
         }
-        var previous = button("前へ", left, height - 52, 60, () -> { page--; rebuildWidgets(); });
+        var previous = button("screen.voicevoxchat.previous", left, height - 52, 60,
+                () -> { page--; rebuildWidgets(); });
         previous.active = page > 0;
-        var next = button("次へ", left + contentWidth - 60, height - 52, 60, () -> { page++; rebuildWidgets(); });
+        var next = button("screen.voicevoxchat.next", left + contentWidth - 60, height - 52, 60,
+                () -> { page++; rebuildWidgets(); });
         next.active = page + 1 < pages;
-        button("完了", left, height - 26, contentWidth, this::onClose);
+        button("screen.voicevoxchat.done", left, height - 26, contentWidth, this::onClose);
     }
 
     /** 大文字・小文字を区別せず編集できるよう、現在の割り当てを可変マップへ複製する。 */
@@ -72,7 +76,9 @@ final class PlayersScreen extends BaseScreen {
             updated.put(playerName.getValue().strip(), Integer.parseInt(speakerId.getValue()));
             if (saveSpeakers(updated)) rebuildWidgets();
         } catch (NumberFormatException exception) {
-            mod.reportError("話者IDは0以上の整数にしてください。");
+            mod.reportError(tr("message.voicevoxchat.invalid_speaker_id"));
+        } catch (ValidationException exception) {
+            mod.reportError(tr(exception.translationKey(), exception.arguments()));
         } catch (IllegalArgumentException exception) {
             mod.reportError(exception.getMessage());
         }
@@ -95,12 +101,12 @@ final class PlayersScreen extends BaseScreen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        label(graphics, "プレイヤー名（例: Alice）", left, 33, 0xFFFFFFFF);
-        label(graphics, "話者ID", left + contentWidth - 74, 33, 0xFFFFFFFF);
-        line(graphics, "登録済み（選択すると編集できます）", 100, 0xFFBBBBBB);
-        String notice = mod.error().isBlank() ? "大文字・小文字は区別しません" : mod.error();
-        line(graphics, notice, height - 68, mod.error().isBlank() ? 0xFFAAAAAA : 0xFFFF8888);
-        graphics.centeredText(font, (page + 1) + " / " + pages,
+        label(graphics, tr("screen.voicevoxchat.player_name_example"), left, 33, 0xFFFFFFFF);
+        label(graphics, tr("screen.voicevoxchat.speaker_id"), left + contentWidth - 74, 33, 0xFFFFFFFF);
+        line(graphics, tr("screen.voicevoxchat.registered_hint"), 100, 0xFFBBBBBB);
+        var notice = mod.hasError() ? mod.error() : tr("screen.voicevoxchat.case_insensitive_hint");
+        line(graphics, notice, height - 68, mod.hasError() ? 0xFFFF8888 : 0xFFAAAAAA);
+        graphics.centeredText(font, tr("screen.voicevoxchat.page", page + 1, pages),
                 width / 2, height - 46, 0xFFFFFFFF);
     }
 }

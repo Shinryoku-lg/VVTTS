@@ -7,6 +7,7 @@ import jp.voicevoxchat.speech.SpeakerCatalog;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -28,14 +29,14 @@ final class SpeakerListScreen extends BaseScreen {
     private Button previousButton;
     private Button nextButton;
     private String query = "";
-    private String refreshError = "";
+    private Component refreshError = Component.empty();
     private boolean requested;
     private int page;
     private int pages = 1;
 
     /** 戻り先と画面タイトルを設定し、共有カタログにある現在の一覧を取得する。 */
     SpeakerListScreen(VoicevoxChatClient mod, Screen parent) {
-        super(mod, parent, "話者ID・名前の一覧");
+        super(mod, parent, "screen.voicevoxchat.speaker_list");
         snapshot = mod.catalog().snapshot();
     }
 
@@ -43,22 +44,22 @@ final class SpeakerListScreen extends BaseScreen {
     @Override
     protected void init() {
         layout();
-        var search = input("ID・名前・Engineで検索", left, 43, contentWidth - 70, 128, query);
+        var search = input("screen.voicevoxchat.speaker_search", left, 43, contentWidth - 70, 128, query);
         search.setResponder(value -> {
             query = value;
             page = 0;
             filterVoices();
         });
-        refreshButton = button("再取得", left + contentWidth - 64, 43, 64, this::refresh);
-        previousButton = button("前へ", left, height - 52, 60, () -> {
+        refreshButton = button("screen.voicevoxchat.refresh", left + contentWidth - 64, 43, 64, this::refresh);
+        previousButton = button("screen.voicevoxchat.previous", left, height - 52, 60, () -> {
             page--;
             updateButtons();
         });
-        nextButton = button("次へ", left + contentWidth - 60, height - 52, 60, () -> {
+        nextButton = button("screen.voicevoxchat.next", left + contentWidth - 60, height - 52, 60, () -> {
             page++;
             updateButtons();
         });
-        button("戻る", left, height - 26, contentWidth, this::onClose);
+        button("screen.voicevoxchat.back", left, height - 26, contentWidth, this::onClose);
         filterVoices();
         if (!requested) refresh();
     }
@@ -67,11 +68,11 @@ final class SpeakerListScreen extends BaseScreen {
     private void refresh() {
         if (pending != null) return;
         requested = true;
-        refreshError = "";
+        refreshError = Component.empty();
         try {
             pending = mod.catalog().refresh();
         } catch (RuntimeException exception) {
-            refreshError = "話者一覧を取得できませんでした。Engineの接続を確認してください。";
+            refreshError = tr("message.voicevoxchat.speaker_list_connection_failed");
         }
         updateButtons();
     }
@@ -107,7 +108,7 @@ final class SpeakerListScreen extends BaseScreen {
             try {
                 snapshot = pending.join();
             } catch (CompletionException | java.util.concurrent.CancellationException exception) {
-                refreshError = "話者一覧を取得できませんでした。再取得してください。";
+                refreshError = tr("message.voicevoxchat.speaker_list_retry");
             } finally {
                 pending = null;
             }
@@ -123,8 +124,8 @@ final class SpeakerListScreen extends BaseScreen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        line(graphics, "検索（ID・名前・Engine）", 31, 0xFFFFFFFF);
-        line(graphics, "話者ID・Engine / 話者名（スタイル）", 70, 0xFFBBBBBB);
+        line(graphics, tr("screen.voicevoxchat.speaker_search"), 31, 0xFFFFFFFF);
+        line(graphics, tr("screen.voicevoxchat.speaker_list_columns"), 70, 0xFFBBBBBB);
         int columnWidth = (contentWidth - 8) / COLUMN_COUNT;
         int pageStart = page * PAGE_SIZE;
         for (int offset = 0; offset < PAGE_SIZE && pageStart + offset < matches.size(); offset++) {
@@ -133,31 +134,34 @@ final class SpeakerListScreen extends BaseScreen {
             int row = offset / COLUMN_COUNT;
             int x = left + column * (columnWidth + 8);
             int y = LIST_TOP + row * ROW_HEIGHT;
-            columnLine(graphics, "ID: " + voice.id() + "  " + voice.engineName(), x, columnWidth, y, 0xFFBBBBBB);
-            String name = voice.speakerName();
-            if (!voice.styleName().isBlank()) name += "（" + voice.styleName() + "）";
+            columnLine(graphics, tr("screen.voicevoxchat.speaker_entry_id", voice.id(), voice.engineName()),
+                    x, columnWidth, y, 0xFFBBBBBB);
+            Component name = voice.styleName().isBlank() ? Component.literal(voice.speakerName())
+                    : tr("screen.voicevoxchat.speaker_entry_name_style", voice.speakerName(), voice.styleName());
             columnLine(graphics, name, x, columnWidth, y + 11, 0xFFFFFFFF);
         }
         if (matches.isEmpty()) {
-            String empty = pending != null ? "話者一覧を取得中…"
-                    : snapshot.voices().isEmpty() ? "話者を取得できていません。Engineを起動してください。"
-                    : "検索条件に一致する話者はいません。";
+            Component empty = pending != null ? tr("screen.voicevoxchat.speaker_list_loading")
+                    : snapshot.voices().isEmpty() ? tr("screen.voicevoxchat.speaker_list_empty")
+                    : tr("screen.voicevoxchat.speaker_search_empty");
             line(graphics, empty, LIST_TOP + 11, 0xFFBBBBBB);
         }
 
-        boolean hasError = !refreshError.isBlank() || !snapshot.errors().isEmpty();
-        String status = pending != null ? "話者一覧を更新中…"
-                : !refreshError.isBlank() ? refreshError
-                : !snapshot.errors().isEmpty() ? String.join(" / ", snapshot.errors()) : "";
-        if (!status.isBlank()) line(graphics, status, height - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
-        String count = matches.size() + "件 / 取得済み " + snapshot.voices().size() + "件";
-        line(graphics, count, height - 66, 0xFFAAAAAA);
-        graphics.centeredText(font, (page + 1) + " / " + pages,
+        boolean hasError = !refreshError.getString().isBlank() || !snapshot.errors().isEmpty();
+        Component status = pending != null ? tr("screen.voicevoxchat.speaker_list_refreshing")
+                : !refreshError.getString().isBlank() ? refreshError
+                : !snapshot.errors().isEmpty() ? tr("message.voicevoxchat.speaker_list_errors",
+                        Component.literal(String.join(" / ", snapshot.errors())))
+                : Component.empty();
+        if (!status.getString().isBlank()) line(graphics, status, height - 78, hasError ? 0xFFFFCC88 : 0xFFAAAAAA);
+        line(graphics, tr("screen.voicevoxchat.speaker_count", matches.size(), snapshot.voices().size()),
+                height - 66, 0xFFAAAAAA);
+        graphics.centeredText(font, tr("screen.voicevoxchat.page", page + 1, pages),
                 width / 2, height - 46, 0xFFFFFFFF);
     }
 
     /** 1列の幅で文字列を切り詰め、指定した列と行に描画する。 */
-    private void columnLine(GuiGraphicsExtractor graphics, String value, int x, int columnWidth, int y, int color) {
-        graphics.text(font, font.plainSubstrByWidth(value, columnWidth), x, y, color);
+    private void columnLine(GuiGraphicsExtractor graphics, Component value, int x, int columnWidth, int y, int color) {
+        graphics.text(font, font.plainSubstrByWidth(value.getString(), columnWidth), x, y, color);
     }
 }

@@ -28,6 +28,26 @@ public final class ConfigStore {
     public record Environment(String engineExecutable, URI engineUri,
                               String nemoEngineExecutable, URI nemoEngineUri) {}
 
+    /** 画面側が言語別メッセージへ変換できる設定値検証エラーを表す。 */
+    public static final class ValidationException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+        private final String translationKey;
+        private final Object[] arguments;
+
+        /** 翻訳キーと表示用引数を保持する検証例外を作成する。 */
+        public ValidationException(String translationKey, Object... arguments) {
+            super(translationKey);
+            this.translationKey = translationKey;
+            this.arguments = arguments.clone();
+        }
+
+        /** 対応する翻訳キーを返す。 */
+        public String translationKey() { return translationKey; }
+
+        /** 翻訳キーへ渡す引数の複製を返す。 */
+        public Object[] arguments() { return arguments.clone(); }
+    }
+
     public record Preferences(boolean enabled, int defaultSpeakerId, Map<String, Integer> playerSpeakers,
                               boolean randomDefaultSpeaker, boolean chatNotifications) {
         /** ランダム割り当てを無効、チャット通知を有効として読み上げ設定を作成する。 */
@@ -43,14 +63,16 @@ public final class ConfigStore {
 
         /** 話者ID・名前・重複を検証し、大文字小文字を区別しない変更不可の割り当て表を作成する。 */
         public Preferences {
-            if (defaultSpeakerId < 0) throw new IllegalArgumentException("話者IDは0以上の整数にしてください。");
+            if (defaultSpeakerId < 0) throw new ValidationException("message.voicevoxchat.invalid_speaker_id");
             TreeMap<String, Integer> copy = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
             playerSpeakers.forEach((name, id) -> {
                 if (name == null || !name.matches("[A-Za-z0-9_]{1,16}")) {
-                    throw new IllegalArgumentException("プレイヤー名は英数字・_の1〜16文字にしてください。");
+                    throw new ValidationException("message.voicevoxchat.invalid_player_name");
                 }
-                if (id == null || id < 0) throw new IllegalArgumentException("話者IDは0以上の整数にしてください。");
-                if (copy.put(name, id) != null) throw new IllegalArgumentException("プレイヤー名が重複しています: " + name);
+                if (id == null || id < 0) throw new ValidationException("message.voicevoxchat.invalid_speaker_id");
+                if (copy.put(name, id) != null) {
+                    throw new ValidationException("message.voicevoxchat.duplicate_player_name", name);
+                }
             });
             playerSpeakers = Collections.unmodifiableMap(copy);
         }
@@ -184,7 +206,7 @@ public final class ConfigStore {
     /** JSONの数値を、小数部分や整数範囲からのはみ出しを許可せず整数に変換する。 */
     private static int integer(JsonElement value) {
         if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
-            throw new IllegalArgumentException("話者IDは0以上の整数にしてください。");
+            throw new ValidationException("message.voicevoxchat.invalid_speaker_id");
         }
         return value.getAsBigDecimal().intValueExact();
     }

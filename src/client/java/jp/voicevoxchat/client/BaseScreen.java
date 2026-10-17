@@ -17,8 +17,8 @@ abstract class BaseScreen extends Screen {
     protected int contentWidth;
 
     /** MOD本体と戻り先を保持し、画面タイトルを設定する。 */
-    BaseScreen(VoicevoxChatClient mod, Screen parent, String title) {
-        super(text(title));
+    BaseScreen(VoicevoxChatClient mod, Screen parent, String titleKey) {
+        super(tr(titleKey));
         this.mod = mod;
         this.parent = parent;
     }
@@ -30,31 +30,38 @@ abstract class BaseScreen extends Screen {
     }
 
     /** 指定位置にボタンを登録し、押下時に指定された処理を実行する。 */
-    protected Button button(String label, int x, int y, int width, Runnable action) {
-        return addRenderableWidget(Button.builder(text(label), button -> action.run())
+    protected Button button(String translationKey, int x, int y, int width, Runnable action) {
+        return button(tr(translationKey), x, y, width, action);
+    }
+
+    /** 翻訳済みComponentを使うボタンを指定位置に登録する。 */
+    protected Button button(Component message, int x, int y, int width, Runnable action) {
+        return addRenderableWidget(Button.builder(message, button -> action.run())
                 .bounds(x, y, width, 20).build());
     }
 
     /** 最大文字数と初期値を設定した入力欄を画面に登録する。 */
-    protected EditBox input(String label, int x, int y, int width, int maxLength, String value) {
-        var field = new EditBox(font, x, y, width, 20, text(label));
+    protected EditBox input(String translationKey, int x, int y, int width, int maxLength, String value) {
+        var field = new EditBox(font, x, y, width, 20, tr(translationKey));
         field.setMaxLength(maxLength);
         field.setValue(value);
         return addRenderableWidget(field);
     }
 
     /** 指定座標と色で文字列を描画する。 */
-    protected void label(GuiGraphicsExtractor graphics, String value, int x, int y, int color) {
+    protected void label(GuiGraphicsExtractor graphics, Component value, int x, int y, int color) {
         graphics.text(font, value, x, y, color);
     }
 
     /** 内容領域の幅に収まる長さへ文字列を切り詰め、左端から描画する。 */
-    protected void line(GuiGraphicsExtractor graphics, String value, int y, int color) {
-        label(graphics, font.plainSubstrByWidth(value, contentWidth), left, y, color);
+    protected void line(GuiGraphicsExtractor graphics, Component value, int y, int color) {
+        label(graphics, Component.literal(font.plainSubstrByWidth(value.getString(), contentWidth)), left, y, color);
     }
 
-    /** 文字列を翻訳キーとして扱わず、表示用のリテラルテキストへ変換する。 */
-    protected static Component text(String value) { return Component.literal(value); }
+    /** 翻訳キーと引数から、表示時に現在の言語で解決されるComponentを作る。 */
+    protected static Component tr(String key, Object... arguments) {
+        return Component.translatable(key, arguments);
+    }
 
     /** ゲーム中はアクセシビリティ設定の強さで背景をぼかし、メニュー中は標準背景を表示する。 */
     @Override
